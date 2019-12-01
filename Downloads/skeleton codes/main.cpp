@@ -25,11 +25,28 @@ using namespace std;
 
 GLint programID;
 // Could define the Vao&Vbo and interaction parameter here
-GLuint vao;
-GLuint vbo;
-GLuint ebo;
-GLuint uvb;
-GLuint Texture;
+GLuint vao[2];
+GLuint vbo[2];
+GLuint ebo[2];
+GLuint Texture[3];
+
+glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, 3.0f);
+glm::vec3 cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);
+glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
+
+bool firstMouse = true;
+float yaw = -90.0f;
+float pitch = 0.0f;
+float lastX = 800.0f/2.0;
+float lastY = 600.0/2.0;
+float fov = 45.0f;
+
+float deltaTime = 0.1f;
+float lastFrame = 0.0f;
+
+int currTex = 0;
+
+std::string filename;
 
 //a series utilities for setting shader parameters 
 void setMat4(const std::string& name, glm::mat4& value)
@@ -138,6 +155,36 @@ void installShaders()
 void mouse_callback(int button, int state, int x, int y)
 {
 	//TODO: Use mouse to do interactive events and animation
+	
+	if (firstMouse) {
+		lastX = x;
+		lastY = y;
+		firstMouse = false;
+	}
+
+	float xoffset = x - lastX;
+	float yoffset = lastY - y;
+	lastX = x;
+	lastY = y;
+
+	float sensitivity = 0.1f;
+	xoffset *= sensitivity;
+	yoffset *= sensitivity;
+
+	yaw += xoffset;
+	pitch += yoffset;
+
+	if (pitch > 89.0f)
+		pitch = 89.0f;
+	if (pitch < -89.0f)
+		pitch = -89.0f;
+	
+	glm::vec3 front;
+	front.x = cos(glm::radians(yaw));
+	front.y = sin(glm::radians(pitch));
+	front.z = sin(glm::radians(yaw));
+
+	cameraFront = glm::normalize(front);
 
 }
 
@@ -149,6 +196,28 @@ void motion_callback(int x, int y)
 void keyboard_callback(unsigned char key, int x, int y)
 {
 	//TODO: Use keyboard to do interactive events and animation
+	
+	float cameraSpeed = 2.5 * deltaTime;
+	if (key == 'w') {
+		cameraPos += cameraSpeed * cameraFront;
+	}
+	if (key == 's') {
+		cameraPos -= cameraSpeed * cameraFront;
+	}
+	if (key == 'a') {
+		cameraPos -= glm::normalize(glm::cross(cameraFront, cameraUp))*cameraSpeed;
+	}
+	if (key == 'd') {
+		cameraPos += glm::normalize(glm::cross(cameraFront, cameraUp))*cameraSpeed;
+	}
+	if (key == '1') {
+		//filename = "resources/cat/cat_01.jpg";
+		currTex = 0;
+	}
+	if (key == '2') {
+		//filename = "resources/cat/cat_02.jpg";
+		currTex = 2;
+	}
 
 }
 
@@ -170,7 +239,7 @@ struct Model {
 	std::vector<unsigned int> indices;
 };
 
-Model obj;
+Model obj[2];
 
 Model loadOBJ(const char* objPath)
 {
@@ -310,7 +379,7 @@ GLuint loadTexture(const char* texturePath)
 
 	stbi_image_free(data);
 	std::cout << "Load " << texturePath << " successfully!" << std::endl;
-	glBindTexture(GL_TEXTURE_2D, 0);
+	//glBindTexture(GL_TEXTURE_2D, 0);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
@@ -326,26 +395,36 @@ void sendDataToOpenGL()
 	//Load objects and bind to VAO & VBO
 	//Load texture
 	
-	obj = loadOBJ("resources/cat/cat.obj");
-	Texture = loadTexture("resources/cat/cat_01.jpg");
+	obj[0] = loadOBJ("resources/cat/cat.obj");
+	obj[1] = loadOBJ("resources/floor/floor.obj");
+	Texture[0] = loadTexture("resources/cat/cat_01.jpg");
+	Texture[1] = loadTexture("resources/floor/floor_spec.jpg");
+	Texture[2] = loadTexture("resources/cat/cat_02.jpg");
 
-	glGenVertexArrays(1, &vao);
-	glGenBuffers(1, &vbo);
-	glGenBuffers(1, &ebo);
+	glGenBuffers(2, vbo);
+	glGenBuffers(2, vao);
+	glGenBuffers(2, ebo);
 
-	glBindVertexArray(vao);
-	glBindBuffer(GL_ARRAY_BUFFER, vbo);
-	glBufferData(GL_ARRAY_BUFFER, obj.vertices.size()*sizeof(Vertex), &obj.vertices[0], GL_STATIC_DRAW);
+	//Cat send data
+	glBindVertexArray(vao[0]);
+	glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo[0]);
+	//glBindVertexArray(vao[0]);
+	glBufferData(GL_ARRAY_BUFFER, obj[0].vertices.size()*sizeof(Vertex), &obj[0].vertices[0], GL_STATIC_DRAW);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo[0]);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, obj[0].indices.size()*sizeof(unsigned int), &obj[0].indices[0], GL_STATIC_DRAW);
 
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, obj.indices.size()*sizeof(unsigned int), &obj.indices[0], GL_STATIC_DRAW);
+
+
+	//Floor send data
+	glBindVertexArray(vao[1]);
+	glBindBuffer(GL_ARRAY_BUFFER, vbo[1]);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo[1]);
+	glBindVertexArray(vao[1]);
+	glBufferData(GL_ARRAY_BUFFER, obj[1].vertices.size()*sizeof(Vertex), &obj[1].vertices[0], GL_STATIC_DRAW);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo[1]);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, obj[1].indices.size()*sizeof(unsigned int), &obj[1].indices[0], GL_STATIC_DRAW);
 	
-	glEnableVertexAttribArray(0);
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, (GLvoid*) 0);
-
-	//load texture
-	glEnableVertexAttribArray(1);
-	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, uv));
 }
 
 void paintGL(void)
@@ -360,6 +439,10 @@ void paintGL(void)
 	GLint viewLoc = glGetUniformLocation(programID, "view");
 	GLint projLoc = glGetUniformLocation(programID, "projection");
 	GLuint TextureID = glGetUniformLocation(programID, "myTextureSampler0");
+	GLint lightPositionUniformLocation = glGetUniformLocation(programID, "lightPositionWorld");
+	GLint ambientLightUniformLocation = glGetUniformLocation(programID, "ambientLight");
+	GLint eyePositionUniformLocation = glGetUniformLocation(programID, "eyePositionWorld");
+
 	
 	//TODO:
 	//Set lighting information, such as position and color of lighting source
@@ -368,26 +451,69 @@ void paintGL(void)
 	
 	//cat
 	
-	glBindVertexArray(vao);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
+	//glBindVertexArray(vao);
+	//glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
 
-	glm::mat4 projection = glm::perspective(45.0f, (GLfloat) GLUT_SCREEN_WIDTH / (GLfloat) GLUT_SCREEN_HEIGHT, 0.1f, 100.0f);
-	glm::mat4 view = glm::lookAt(glm::vec3(0,3,0), glm::vec3(0,0,0), glm::vec3(0,0,1));
+	glm::mat4 projection = glm::perspective(glm::radians(fov), (GLfloat) GLUT_SCREEN_WIDTH / (GLfloat) GLUT_SCREEN_HEIGHT, 0.1f, 100.0f);
+	glm::mat4 view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
 	glm::mat4 model = glm::mat4(1.0f);
 	model = glm::scale(model, glm::vec3(0.05f, 0.05f, 0.05f));
-	model = glm::translate(model, glm::vec3(0.0f, 0.0f, 0.0f));
+	model = glm::translate(model, glm::vec3(0.0f, -10.0f, -10.0f));
+	model = glm::rotate(model, glm::radians(60.0f), glm::vec3(-1.0f, 0.0f, 0.0f));
+	
+	glm::vec3 lightPosition(2.0f, 15.0f, -10.0f);
+	glm::vec3 ambientLight(0.5f, 0.0f, 0.0f);
+	glm::vec3 eyePosition(0.0f, 0.0f, 0.0f);
+
+	glUniform3fv(lightPositionUniformLocation, 1, &lightPosition[0]);
+	glUniform3fv(ambientLightUniformLocation, 1, &ambientLight[0]);
+	glUniform3fv(eyePositionUniformLocation, 1, &eyePosition[0]);
 	
 	glUniformMatrix4fv(modelLoc, 1, GL_FALSE, &model[0][0]);
 	glUniformMatrix4fv(viewLoc, 1, GL_FALSE, &view[0][0]);
 	glUniformMatrix4fv(projLoc, 1, GL_FALSE, &projection[0][0]);
 	
 	//texture
+	glBindVertexArray(vao[0]);
+	glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
+	glEnableVertexAttribArray(0);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, position));
+	glEnableVertexAttribArray(1);
+	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, uv));
+	glEnableVertexAttribArray(2);
+	glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, normal));
 	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, Texture);
+	glBindTexture(GL_TEXTURE_2D, Texture[currTex]);
 	glUniform1i(TextureID, 0);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo[0]);
+	glDrawElements(GL_TRIANGLES, obj[0].indices.size(), GL_UNSIGNED_INT, (void*) 0);
 	
-	//glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
-	glDrawElements(GL_TRIANGLES, obj.indices.size(), GL_UNSIGNED_INT, (void*) 0);
+	//floor
+	glm::mat4 projection1 = glm::perspective(glm::radians(fov), (GLfloat) GLUT_SCREEN_WIDTH / (GLfloat) GLUT_SCREEN_HEIGHT, 0.1f, 100.0f);
+	glm::mat4 view1 = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
+	glm::mat4 model1 = glm::mat4(1.0f);
+	//model1 = glm::scale(model1, glm::vec3(10.0f, 10.0f, 10.0f));
+	model1 = glm::translate(model1, glm::vec3(10.0f, 0.0f, 0.0f));
+	model1 = glm::rotate(model1, glm::radians(60.0f), glm::vec3(-1.0f, 0.0f, 0.0f));
+	
+	glUniformMatrix4fv(modelLoc, 1, GL_FALSE, &model1[0][0]);
+	glUniformMatrix4fv(viewLoc, 1, GL_FALSE, &view1[0][0]);
+	glUniformMatrix4fv(projLoc, 1, GL_FALSE, &projection1[0][0]);
+
+	glBindVertexArray(vao[1]);
+	glBindBuffer(GL_ARRAY_BUFFER, vbo[1]);
+	//glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo[1]);
+	glEnableVertexAttribArray(0);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, position));
+	glEnableVertexAttribArray(1);
+	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, uv));
+	glEnableVertexAttribArray(2);
+	glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, normal));
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, Texture[1]);
+	glUniform1i(TextureID, 0);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo[1]);
+	glDrawElements(GL_TRIANGLES, obj[1].indices.size(), GL_UNSIGNED_INT, (void*) 0);
 
 	glFlush();
 	glutPostRedisplay();
@@ -425,4 +551,19 @@ int main(int argc, char* argv[])
 void mouseWheel_callback(int wheel, int direction, int x, int y)
 {
 	// Optional.
-}
+	if(wheel && direction) {
+		if (fov >= 1.0f && fov <= 45.0f)
+			fov -= y;
+		if (fov <= 1.0f)
+			fov = 1.0f;
+		if (fov >= 45.0f)
+			fov = 45.0f;
+	} else if (wheel && !direction) {
+		if (fov >= 1.0f && fov <= 45.0f) 
+			fov += y;
+		if (fov <= 1.0f)
+			fov = 1.0f;
+		if (fov >= 45.0f)
+			fov = 45.0f;
+	}
+}	
